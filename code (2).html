@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Membership Takoyaki - Bonus 10 Box = 1 Free</title>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script> <!-- Library QR Code -->
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; }
+        form { margin-bottom: 20px; }
+        input, select, button { padding: 10px; margin: 5px; width: 100%; max-width: 300px; }
+        button { background: #ff6600; color: white; border: none; cursor: pointer; }
+        button:hover { background: #e55a00; }
+        #customers, #purchases { margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        #qrCode { margin-top: 10px; }
+        #waNotification { margin-top: 10px; display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sistem Membership Takoyaki</h1>
+        <p>Keuntungan: Setiap pembelian 10 box = bonus 1 box gratis! Pendaftaran via WA pribadi Anda, lalu scan barcode saat beli.</p>
+
+        <!-- Form Daftar Membership (Admin) -->
+        <h2>Daftar Membership Baru (Admin - Setelah Pesan WA)</h2>
+        <form id="registerForm">
+            <input type="text" id="name" placeholder="Nama Pelanggan" required>
+            <input type="text" id="phone" placeholder="Nomor HP" required>
+            <button type="submit">Daftar & Generate Barcode</button>
+        </form>
+        <div id="qrCode"></div> <!-- Tempat QR Code -->
+
+        <!-- Form Input Pembelian (Admin - Pilih Nama Pelanggan) -->
+        <h2>Input Pembelian (Admin - Pilih Nama Pelanggan)</h2>
+        <form id="purchaseForm">
+            <select id="customerSelect" required>
+                <option value="">Pilih Nama Pelanggan</option>
+            </select>
+            <input type="number" id="boxes" placeholder="Jumlah Box Dibeli" min="1" required>
+            <button type="submit">Catat Pembelian</button>
+        </form>
+        <div id="waNotification">
+            <p>Pelanggan hampir dapat bonus! Klik tombol di bawah untuk kirim notifikasi WA.</p>
+            <button id="sendWaBtn">Kirim Notifikasi WA</button>
+        </div>
+
+        <!-- Dashboard -->
+        <h2>Dashboard Pelanggan</h2>
+        <div id="customers">
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Nama</th>
+                        <th>Nomor HP</th>
+                        <th>Total Box Dibeli</th>
+                        <th>Bonus Tersedia (Box Gratis)</th>
+                    </tr>
+                </thead>
+                <tbody id="customerTable"></tbody>
+            </table>
+        </div>
+
+        <h2>Riwayat Pembelian</h2>
+        <div id="purchases">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Nama Pelanggan</th>
+                        <th>Jumlah Box</th>
+                        <th>Tanggal</th>
+                        <th>Bonus Diberikan</th>
+                    </tr>
+                </thead>
+                <tbody id="purchaseTable"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Data penyimpanan (localStorage untuk demo)
+        let customers = JSON.parse(localStorage.getItem('customers')) || [];
+        let purchases = JSON.parse(localStorage.getItem('purchases')) || [];
+
+        // Fungsi generate ID unik
+        function generateId() {
+            return 'TKY-' + Math.random().toString(36).substr(2, 9).toUpperCase();
+        }
+
+        // Fungsi hitung bonus: Setiap 10 box = 1 bonus
+        function calculateBonus(totalBoxes) {
+            return Math.floor(totalBoxes / 10);
+        }
+
+        // Fungsi update dropdown nama pelanggan
+        function updateCustomerSelect() {
+            const select = document.getElementById('customerSelect');
+            select.innerHTML = '<option value="">Pilih Nama Pelanggan</option>';
+            customers.forEach((cust, index) => {
+                select.innerHTML += `<option value="${index}">${cust.name}</option>`;
+            });
+        }
+
+        // Daftar membership (Admin)
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const name = document.getElementById('name').value;
+            const phone = document.getElementById('phone').value;
+            const id = generateId();
+            customers.push({ id, name, phone, totalBoxes: 0, bonusesClaimed: 0 });
+            localStorage.setItem('customers', JSON.stringify(customers));
+            updateCustomerSelect();
+            updateTables();
+            // Generate QR Code
+            const qrDiv = document.getElementById('qrCode');
+            qrDiv.innerHTML = `<p>ID Pelanggan: ${id}</p><p>Cetak QR ini untuk kartu membership.</p>`;
+            QRCode.toCanvas(document.createElement('canvas'), id, { width: 200 }, function(error, canvas) {
+                if (error) console.error(error);
+                qrDiv.appendChild(canvas);
+            });
+            alert(`Pelanggan ${name} didaftar dengan ID: ${id}. Kirim ID/QR ke WA pelanggan!`);
+            this.reset();
+        });
+
+        // Input pembelian (Admin - pilih nama)
+        document.getElementById('purchaseForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const customerIndex = document.getElementById('customerSelect').value;
+            const boxes = parseInt(document.getElementById('boxes').value);
+            if (customerIndex === '') return;
+            const customer = customers[customerIndex];
+            customer.totalBoxes += boxes;
+            const bonusGiven = calculateBonus(customer.totalBoxes) - customer.bonusesClaimed;
+            if (bonusGiven > 0) {
+                customer.bonusesClaimed += bonusGiven;
+                alert(`Bonus ${bonusGiven} box gratis diberikan!`);
+            }
+            purchases.push({ customerName: customer.name, boxes, date: new Date().toLocaleString(), bonusGiven });
+            localStorage.setItem('customers', JSON.stringify(customers));
+            localStorage.setItem('purchases', JSON.stringify(purchases));
+            updateTables();
+
+            // Cek notifikasi WA: Jika total box % 10 == 9 (tinggal 1 lagi untuk bonus)
+            const waDiv = document.getElementById('waNotification');
+            const sendWaBtn = document.getElementById('sendWaBtn');
+            if (customer.totalBoxes % 10 === 9) {
+                waDiv.style.display = 'block';
+                sendWaBtn.onclick = function() {
+                    const message = `Halo ${customer.name}, Anda sudah beli ${customer.totalBoxes} box takoyaki! Beli 1 box lagi untuk dapat bonus 1 box gratis!`;
+                    const waUrl = `https://wa.me/${customer.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
+                    window.open(waUrl, '_blank');
+                    waDiv.style.display = 'none'; // Sembunyikan setelah klik
+                };
+            } else {
+                waDiv.style.display = 'none';
+            }
+
+            this.reset();
+        });
+
+        // Update tabel
+        function updateTables() {
+            const customerTable = document.getElementById('customerTable');
+            customerTable.innerHTML = '';
+            customers.forEach(cust => {
+                const availableBonuses = calculateBonus(cust.totalBoxes) - cust.bonusesClaimed;
+                customerTable.innerHTML += `
+                    <tr>
+                        <td>${cust.id}</td>
+                        <td>${cust.name}</td>
+                        <td>${cust.phone}</td>
+                        <td>${cust.totalBoxes}</td>
+                        <td>${availableBonuses}</td>
+                    </tr>
+                `;
+            });
+
+            const purchaseTable = document.getElementById('purchaseTable');
+            purchaseTable.innerHTML = '';
+            purchases.forEach(purch => {
+                purchaseTable.innerHTML += `
+                    <tr>
+                        <td>${purch.customerName}</td>
+                        <td>${purch.boxes}</td>
+                        <td>${purch.date}</td>
+                        <td>${purch.bonusGiven}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        // Inisialisasi
+        updateCustomerSelect();
+        updateTables();
+    </script>
+</body>
+</html>
